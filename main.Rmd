@@ -1,0 +1,74 @@
+---
+title: "main"
+output: html_document
+date: "2026-04-03"
+---
+
+Part 2
+```{r}
+datasolar <- read.csv("datasolar.csv")
+datasolar
+```
+
+
+Part 3
+
+
+# 3.1
+```{r}
+box_data_60min <- read.csv("box_data_60min.csv")
+box_data_60min
+```
+
+
+```{r}
+# Convert tdate to datetime (POSIXct) instead of Date
+# Force it via character first
+
+box_data_60min$tdate <- as.POSIXct(box_data_60min$tdate, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+head(box_data_60min$tdate)
+```
+
+Install packages
+```{r}
+library(ggplot2)
+library(dplyr)
+library(patchwork)
+```
+
+Ph
+```{r}
+# Individual plots
+plot1 <- ggplot(data = box_data_60min, aes(x = tdate, y = Ph)) +
+  geom_line(color = "blue") +
+  labs(title = "Ph vs dtime")
+
+plot1
+```
+
+Tdelta
+```{r}
+# Individual plots
+plot2 <- ggplot(data = box_data_60min, aes(x = tdate, y = Tdelta)) +
+  geom_line(color = "Red") +
+  labs(title = "Tdelta vs dtime")
+
+plot2
+```
+
+Gv
+```{r}
+# Individual plots
+plot3 <- ggplot(data = box_data_60min, aes(x = tdate, y = Gv)) +
+  geom_line(color = "orange") +
+  labs(title = "Gv vs dtime")
+
+plot3
+```
+
+# 3.2 split to training and test
+```{r}
+
+```
+
+# 3.3 
