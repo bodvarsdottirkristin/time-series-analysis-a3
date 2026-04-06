@@ -42,8 +42,11 @@ Ph
 plot1 <- ggplot(data = box_data_60min, aes(x = tdate, y = Ph)) +
   geom_line(color = "blue") +
   labs(title = "Ph vs dtime")
+plot1
+png("myndir/plot_3_1_1.png", width = 2400, height = 1600, res = 300)
 
 plot1
+dev.off()
 ```
 
 Tdelta
@@ -52,8 +55,11 @@ Tdelta
 plot2 <- ggplot(data = box_data_60min, aes(x = tdate, y = Tdelta)) +
   geom_line(color = "Red") +
   labs(title = "Tdelta vs dtime")
+plot2
+png("myndir/plot_3_1_2.png", width = 2400, height = 1600, res = 300)
 
 plot2
+dev.off()
 ```
 
 Gv
@@ -62,13 +68,402 @@ Gv
 plot3 <- ggplot(data = box_data_60min, aes(x = tdate, y = Gv)) +
   geom_line(color = "orange") +
   labs(title = "Gv vs dtime")
+plot3
+
+png("myndir/plot_3_1_3.png", width = 2400, height = 1600, res = 300)
 
 plot3
+dev.off()
 ```
 
 # 3.2 split to training and test
 ```{r}
+# Training set: up to and including "2013-02-06 00:00" (t_hour = 1,...,167)
+# Test set: everything after
+
+# Convert tdate to POSIXct first
+box_data_60min$tdate <- as.POSIXct(box_data_60min$tdate, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+
+# Split into train and test sets
+train_data <- box_data_60min[box_data_60min$tdate <= as.POSIXct("2013-02-06 00:00:00", tz = "UTC"), ]
+test_data  <- box_data_60min[box_data_60min$tdate >  as.POSIXct("2013-02-06 00:00:00", tz = "UTC"), ]
+
+# Verify the split
+cat("Training set rows:", nrow(train_data), "\n")
+cat("Training set range:", format(min(train_data$tdate)), "to", format(max(train_data$tdate)), "\n\n")
+cat("Test set rows:", nrow(test_data), "\n")
+cat("Test set range:", format(min(test_data$tdate)), "to", format(max(test_data$tdate)), "\n")
+```
+USE train_data FROM NOW ON
+
+
+# 3.3 
+```{r}
+# scatter
+
+library(PerformanceAnalytics)
+
+png("myndir/plot_3_3_1.png", width = 2400, height = 1600, res = 300)
+
+chart.Correlation(train_data[, c("Ph", "Gv", "Tdelta")])
+
+dev.off()
+```
+
+Another option
+```{r}
+
+p1 <- ggplot(train_data, aes(x = Tdelta, y = Ph)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "loess", color = "orange")
+
+p2 <- ggplot(train_data, aes(x = Gv, y = Ph)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "loess", color = "purple")
+
+p3 <- ggplot(train_data, aes(x = Tdelta, y = Gv)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "loess", color = "green")
+
+png("myndir/plot_3_3_1b.png", width = 2400, height = 800, res = 300)
+p1 | p2 | p3
+dev.off()
+p1 | p2 | p3
 
 ```
 
-# 3.3 
+
+```{r}
+# auto-correlation 
+
+png("myndir/plot_3_3_2.png", width = 2400, height = 800, res = 300)
+
+par(mfrow = c(1, 3))
+acf(train_data$Ph, main="ACF of Ph")
+
+acf(train_data$Tdelta, main="ACF of Tdelta")
+
+acf(train_data$Gv, main="ACF of Gv")
+
+dev.off()
+par(mfrow = c(1, 1))
+
+```
+
+```{r}
+# cross-correlation
+
+# Base R CCF, then autoplot
+library(ggfortify)
+library(patchwork)
+
+p1 <- autoplot(ccf(train_data$Ph,     train_data$Gv,     plot = FALSE)) +
+  labs(title = "CCF: Ph vs Gv")
+
+p2 <- autoplot(ccf(train_data$Ph,     train_data$Tdelta, plot = FALSE)) +
+  labs(title = "CCF: Ph vs Tdelta")
+
+p3 <- autoplot(ccf(train_data$Tdelta, train_data$Gv,     plot = FALSE)) +
+  labs(title = "CCF: Tdelta vs Gv")
+
+png("myndir/plot_3_3_3.png", width = 2400, height = 800, res = 300)
+p1 | p2 | p3 
+dev.off()
+```
+
+
+# 3.4
+
+```{r}
+library(vars)
+
+# Fit a VAR model with the three variables
+var_data <- train_data[, c("Ph", "Gv", "Tdelta")]
+
+# Estimate the lag order of the model (p)
+# AIC column shows suggested lag order
+VARselect(var_data, lag.max = 10, type = "const")
+
+var_model <- VAR(var_data, p = 5, type = "const")  # p = lag order
+
+# Impulse response from Tdelta to Ph
+irf_tdelta <- irf(var_model, 
+                  impulse   = "Tdelta", 
+                  response  = "Ph", 
+                  n.ahead   = 10, # up to 10 lags
+                  boot      = TRUE)
+
+# Impulse response from Gv to Ph
+irf_gv <- irf(var_model, 
+              impulse   = "Gv", 
+              response  = "Ph", 
+              n.ahead   = 10, # up to 10 lags
+              boot      = TRUE)
+
+# Plot both
+png("myndir/plot_irf_Tdelta_Ph.png", width = 2400, height = 1200, res = 300)
+
+plot(irf_tdelta, main = "IRF: Tdelta -> Ph")
+
+png("myndir/plot_irf_Gv_Ph.png", width = 2400, height = 1200, res = 300)
+
+plot(irf_gv,     main = "IRF: Gv -> Ph")
+dev.off()
+
+```
+
+# 3.5
+
+```{r}
+lm_model <- lm(Ph ~ Gv + Tdelta - 1, data=train_data) # -1 removes intercept as per the equation
+summary(lm_model)
+
+```
+```{r}
+train_data$Ph_pred <- fitted(lm_model)
+
+# Plot actual vs predicted
+p1 <- ggplot(train_data, aes(x = tdate)) +
+  geom_line(aes(y = Ph,      color = "Actual")) +
+  geom_line(aes(y = Ph_pred, color = "Predicted")) +
+  labs(title = "One-step prediction", y = "Ph", color = "") +
+  scale_color_manual(values = c("Actual" = "black", "Predicted" = "orange"))
+
+p1
+```
+```{r}
+train_data$resid <- residuals(lm_model)
+
+# Residual plot over time
+p2 <- ggplot(train_data, aes(x = tdate, y = resid)) +
+  geom_line(color = "steelblue") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Residuals over time", y = "Residual")
+
+# Residual histogram
+p3 <- ggplot(train_data, aes(x = resid)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 30, fill = "lightblue") +
+  geom_density(color = "orange", linewidth = 1) +
+  labs(title = "Residual distribution", x = "Residual")
+
+# Save
+png("myndir/plot_lm_pred.png", width = 2400, height = 1200, res = 300)
+p1 / p2 / p3
+dev.off()
+```
+
+```{r}
+png("myndir/plot_lm_acf_ccf.png", width = 2400, height = 800, res = 300)
+par(mfrow = c(1, 3))
+acf(train_data$resid,                        main = "ACF of residuals")
+ccf(train_data$resid, train_data$Gv,         main = "CCF: residuals vs Gv")
+ccf(train_data$resid, train_data$Tdelta,     main = "CCF: residuals vs Tdelta")
+dev.off()
+par(mfrow = c(1, 1))
+```
+
+# 3.6
+```{r}
+arx_model <- lm(Ph ~ Ph.l1 + Gv + Tdelta - 1, data = train_data)
+summary(arx_model)
+```
+
+```{r}
+
+train_data$resid_arx      <- residuals(arx_model)
+train_data$Ph_arx_pred    <- fitted(arx_model)
+
+# One-step prediction
+p1 <- ggplot(train_data, aes(x = tdate)) +
+  geom_line(aes(y = Ph,          color = "Actual")) +
+  geom_line(aes(y = Ph_arx_pred, color = "Predicted")) +
+  labs(title = "ARX(1) one-step prediction", y = "Ph", color = "") +
+  scale_color_manual(values = c("Actual" = "black", "Predicted" = "orange"))
+
+# Residuals over time
+p2 <- ggplot(train_data, aes(x = tdate, y = resid_arx)) +
+  geom_line(color = "steelblue") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "ARX(1) residuals over time", y = "Residual")
+
+# Residual histogram
+p3 <- ggplot(train_data, aes(x = resid_arx)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 30, fill = "lightblue") +
+  geom_density(color = "orange", linewidth = 1) +
+  labs(title = "ARX(1) residual distribution", x = "Residual")
+
+png("myndir/plot_arx_pred.png", width = 2400, height = 1200, res = 300)
+p1 / p2 / p3
+dev.off()
+```
+
+```{r}
+png("myndir/plot_arx_acf_ccf.png", width = 2400, height = 800, res = 300)
+par(mfrow = c(1, 3))
+acf(train_data$resid_arx,                        main = "ACF of residuals")
+ccf(train_data$resid_arx, train_data$Gv,         main = "CCF: residuals vs Gv")
+ccf(train_data$resid_arx, train_data$Tdelta,     main = "CCF: residuals vs Tdelta")
+dev.off()
+par(mfrow = c(1, 1))
+```
+
+# 3.7
+
+```{r}
+
+max_order <- 10
+aic_vals  <- numeric(max_order)
+bic_vals  <- numeric(max_order)
+
+for (p in 1:max_order) {
+  
+  ph_lags     <- paste0("Ph.l",     1:p, collapse = " + ")
+  gv_lags     <- paste0("Gv.l",     1:p, collapse = " + ")
+  tdelta_lags <- paste0("Tdelta.l", 1:p, collapse = " + ")
+  
+  formula_str <- paste("Ph ~ Gv + Tdelta +", ph_lags, "+", gv_lags, "+", tdelta_lags, "- 1")
+  
+  fit          <- lm(as.formula(formula_str), data = train_data)
+  aic_vals[p]  <- AIC(fit)
+  bic_vals[p]  <- BIC(fit)
+}
+```
+
+```{r}
+library(ggplot2)
+library(tidyr)
+
+criteria_df <- data.frame(
+  order = 1:max_order,
+  AIC   = aic_vals,
+  BIC   = bic_vals
+)
+
+criteria_long <- pivot_longer(criteria_df, 
+                               cols      = c(AIC, BIC), 
+                               names_to  = "criterion", 
+                               values_to = "value")
+
+p_ic <- ggplot(criteria_long, aes(x = order, y = value, color = criterion)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  scale_x_continuous(breaks = 1:max_order) +
+  labs(title = "AIC and BIC vs ARX model order",
+       x     = "Model order",
+       y     = "Information criterion",
+       color = "") +
+  scale_color_manual(values = c("AIC" = "orange", "BIC" = "steelblue"))
+
+png("myndir/plot_arx_order.png", width = 2400, height = 1200, res = 300)
+p_ic
+dev.off()
+```
+
+
+# 3.8
+
+```{r}
+max_order <- 10
+rmse_vals <- numeric(max_order)
+
+for (p in 1:max_order) {
+  
+  ph_lags     <- paste0("Ph.l",     1:p, collapse = " + ")
+  gv_lags     <- paste0("Gv.l",     1:p, collapse = " + ")
+  tdelta_lags <- paste0("Tdelta.l", 1:p, collapse = " + ")
+  
+  formula_str <- paste("Ph ~ Gv + Tdelta +", ph_lags, "+", gv_lags, "+", tdelta_lags, "- 1")
+  
+  fit          <- lm(as.formula(formula_str), data = train_data)
+  preds        <- predict(fit, newdata = test_data)
+  residuals    <- test_data$Ph - preds
+  rmse_vals[p] <- sqrt(mean(residuals^2, na.rm = TRUE))
+}
+
+```
+
+```{r}
+rmse_df <- data.frame(order = 1:max_order, RMSE = rmse_vals)
+
+p_rmse <- ggplot(rmse_df, aes(x = order, y = RMSE)) +
+  geom_line(linewidth = 1, color = "steelblue") +
+  geom_point(size = 2,    color = "steelblue") +
+  scale_x_continuous(breaks = 1:max_order) +
+  labs(title = "Test RMSE vs ARX model order",
+       x     = "Model order",
+       y     = "RMSE")
+
+png("myndir/plot_arx_rmse.png", width = 2400, height = 1200, res = 300)
+p_rmse
+dev.off()
+```
+
+# 3.9
+
+```{r}
+# Fit ARX(3) using existing lag columns
+arx3_model <- lm(Ph ~ Gv + Tdelta +
+                   Ph.l1 + Ph.l2 + Ph.l3 +
+                   Gv.l1 + Gv.l2 + Gv.l3 +
+                   Tdelta.l1 + Tdelta.l2 + Tdelta.l3 - 1,
+                 data = train_data)
+
+# Combine full data
+original_cols <- c("tdate", "Ph", "Gv", "Tdelta",
+                   "Gv.l1", "Gv.l2", "Gv.l3",
+                   "Tdelta.l1", "Tdelta.l2", "Tdelta.l3")
+
+full_data        <- rbind(train_data[, original_cols],
+                          test_data[,  original_cols])
+Ph_sim           <- full_data$Ph
+
+# Simulation loop — Gv and Tdelta lags come from data, Ph lags are iterative
+for (t in 4:nrow(full_data)) {
+  
+  newrow <- data.frame(
+    Gv        = full_data$Gv[t],
+    Tdelta    = full_data$Tdelta[t],
+    Gv.l1     = full_data$Gv.l1[t],
+    Gv.l2     = full_data$Gv.l2[t],
+    Gv.l3     = full_data$Gv.l3[t],
+    Tdelta.l1 = full_data$Tdelta.l1[t],
+    Tdelta.l2 = full_data$Tdelta.l2[t],
+    Tdelta.l3 = full_data$Tdelta.l3[t],
+    Ph.l1     = Ph_sim[t - 1],  # simulated iteratively
+    Ph.l2     = Ph_sim[t - 2],
+    Ph.l3     = Ph_sim[t - 3]
+  )
+  
+  Ph_sim[t] <- predict(arx3_model, newdata = newrow)
+}
+
+full_data$Ph_sim <- Ph_sim
+full_data$period <- c(rep("Train", nrow(train_data)), rep("Test", nrow(test_data)))
+```
+
+
+
+```{r}
+p1 <- ggplot(full_data, aes(x = tdate)) +
+  geom_line(aes(y = Ph,     color = "Actual")) +
+  geom_line(aes(y = Ph_sim, color = "Simulated")) +
+  geom_vline(xintercept = as.numeric(full_data$tdate[nrow(train_data)]),
+             linetype = "dashed", color = "gray40") +
+  annotate("text",
+           x     = full_data$tdate[nrow(train_data)],
+           y     = max(full_data$Ph),
+           label = "Train | Test",
+           hjust = 1.1,
+           size  = 3) +
+  scale_color_manual(values = c("Actual" = "black", "Simulated" = "orange")) +
+  labs(title = "Multi-step simulation — ARX(3)",
+       x     = "Time",
+       y     = "Ph",
+       color = "")
+
+png("myndir/plot_arx3_simulation.png", width = 2400, height = 1000, res = 300)
+p1
+dev.off()
+```
+
+
