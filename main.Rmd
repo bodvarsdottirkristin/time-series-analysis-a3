@@ -3,6 +3,196 @@ title: "main"
 output: html_document
 date: "2026-04-03"
 ---
+Part 1
+# 1.1
+Written in arima package format:
+$X_t = -\phi_1 X_{t-1} - \phi_2 X_{t-2} + \epsilon_t$
+```{r}
+set.seed(42)
+sims <- replicate(5, arima.sim(model = list(ar = c(0.6, -0.5)), n = 200))
+
+pdf("myndir/1_1_ar2_simulations.pdf", width = 7, height = 4)  # good size for Overleaf
+
+par(mar = c(4, 4, 2, 1))  # tighter margins: bottom, left, top, right
+
+matplot(sims,
+        type  = "l",
+        lty   = 1,
+        lwd   = 1.2,
+        col   = scales::alpha(1:5, 0.8),   # or just col = 1:5
+        xlab  = "Time",
+        ylab  = expression(X[t]),
+        main  = expression("AR(2): " ~ phi[1] == -0.6 ~ ", " ~ phi[2] == 0.5),
+        las   = 1)   # horizontal axis tick labels
+
+abline(h = 0, lty = 2, col = "gray60", lwd = 0.8)
+
+legend("topright",
+       legend = paste("Realization", 1:5),
+       col    = 1:5,
+       lty    = 1,
+       lwd    = 1.2,
+       bty    = "n",        # no box around legend
+       cex    = 0.75)
+
+dev.off()
+```
+#1.2
+```{r}
+rho <- ARMAacf(ar = c(0.6, -0.5), lag.max = 30)
+
+cols <- c("#E41A1C", "#377EB8", "#4DAF4A", "#984EA3", "#FF7F00")
+
+pdf("myndir/1_2_ar2_acf.pdf", width = 9, height = 4.5)
+par(mar = c(4, 4, 2, 1))
+
+n_groups <- 31
+n_bars   <- 6
+bar_w    <- 0.12
+gap      <- 0.6
+positions <- seq(0, by = (n_bars * bar_w + gap), length.out = n_groups)
+
+plot(0, type = "n",
+     xlim = c(-0.5, max(positions) + 0.5),
+     ylim = c(-1, 1),
+     xlab = "Lag k", ylab = expression(rho(k)),
+     main = expression("ACF: AR(2), " ~ phi[1] == -0.6 ~ ", " ~ phi[2] == 0.5),
+     xaxt = "n", las = 1)
+
+axis(1, at = positions + (n_bars * bar_w) / 2 - bar_w/2, labels = 0:30, cex.axis = 0.75)
+
+abline(h = 0,               col = "gray40", lwd = 1)
+abline(h =  1.96/sqrt(200), lty = 2, col = "gray60")
+abline(h = -1.96/sqrt(200), lty = 2, col = "gray60")
+
+# Theoretical ACF first (position 0 in each group) — thick & black
+xpos_theo <- positions
+segments(x0 = xpos_theo, y0 = 0,
+         x1 = xpos_theo, y1 = rho,
+         col = "black", lwd = 7, lend = 1)
+
+# Empirical ACF bars (positions 1-5) — slimmer
+for (i in 1:5) {
+  emp  <- acf(sims[, i], lag.max = 30, plot = FALSE)
+  xpos <- positions + i * bar_w
+  segments(x0 = xpos, y0 = 0,
+           x1 = xpos, y1 = as.numeric(emp$acf),
+           col = adjustcolor(cols[i], 0.75),
+           lwd = 3, lend = 1)
+}
+
+legend("topright",
+       legend = c("Theoretical", paste("Realization", 1:5)),
+       col    = c("black", adjustcolor(cols, 0.75)),
+       lwd    = c(7, rep(3, 5)),
+       lty    = 1,
+       bty    = "n", cex = 0.75, ncol = 2)
+
+dev.off()
+```
+
+
+
+Function for 1.1-1.6:
+```{r}
+plot_ar2 <- function(phi1, phi2, subsection, n = 200, seed = 42) {
+  
+  # Create output directory if it doesn't exist
+  if (!dir.exists("myndir")) dir.create("myndir")
+  
+  filename <- paste0("myndir/1_", subsection, "_ar2_phi1_", phi1, "_phi2_", phi2, ".pdf")
+  
+  
+  set.seed(seed)
+  
+  # Try arima.sim, fall back to manual simulation if non-stationary
+  sim_ar2 <- function() {
+    tryCatch(
+      arima.sim(model = list(ar = c(-phi1, -phi2)), n = n),
+      error = function(e) {
+        # Manual simulation for non-stationary case
+        x <- numeric(n + 2)
+        eps <- rnorm(n + 2)
+        for (t in 3:(n + 2)) {
+          x[t] <- -phi1 * x[t-1] - phi2 * x[t-2] + eps[t]
+        }
+        x[3:(n + 2)]
+      }
+    )
+  }
+  
+  sims <- replicate(5, sim_ar2())
+  
+  # Theoretical ACF only for stationary processes
+  is_stationary <- tryCatch({
+    ARMAacf(ar = c(-phi1, -phi2), lag.max = 30)
+    TRUE
+  }, error = function(e) FALSE)
+  
+  cols <- c("#E41A1C", "#377EB8", "#4DAF4A", "#984EA3", "#FF7F00")
+
+  pdf(filename, width = 9, height = 8)
+  par(mfrow = c(2, 1), mar = c(4, 4, 2, 1))
+  
+  # --- Simulations ---
+  matplot(sims, type = "l", lty = 1, lwd = 1.2,
+          col  = adjustcolor(cols, 0.8),
+          xlab = "Time", ylab = expression(X[t]),
+          main = bquote("AR(2):" ~ phi[1] == .(phi1) ~ "," ~ phi[2] == .(phi2)),
+          las  = 1)
+  abline(h = 0, lty = 2, col = "gray60")
+  legend("topright", legend = paste("Realization", 1:5),
+         col = adjustcolor(cols, 0.8), lwd = 1.2, lty = 1, bty = "n", cex = 0.75)
+  
+  # --- ACF ---
+  n_bars <- 6; bar_w <- 0.12; gap <- 0.6
+  positions <- seq(0, by = (n_bars * bar_w + gap), length.out = 31)
+  
+  plot(0, type = "n",
+       xlim = c(-0.5, max(positions) + 0.5), ylim = c(-1, 1),
+       xlab = "Lag k", ylab = expression(rho(k)),
+       main = expression("Empirical vs Theoretical ACF"),
+       xaxt = "n", las = 1)
+  axis(1, at = positions + (n_bars * bar_w)/2 - bar_w/2, labels = 0:30, cex.axis = 0.75)
+  abline(h = 0, col = "gray40")
+  abline(h =  1.96/sqrt(n), lty = 2, col = "gray60")
+  abline(h = -1.96/sqrt(n), lty = 2, col = "gray60")
+  
+  # Theoretical bar (only if stationary)
+  if (is_stationary) {
+    rho <- ARMAacf(ar = c(-phi1, -phi2), lag.max = 30)
+    segments(x0 = positions, y0 = 0, x1 = positions, y1 = rho,
+             col = "black", lwd = 7, lend = 1)
+  }
+  
+  for (i in 1:5) {
+    emp  <- acf(sims[, i], lag.max = 30, plot = FALSE)
+    xpos <- positions + i * bar_w
+    segments(x0 = xpos, y0 = 0, x1 = xpos, y1 = as.numeric(emp$acf),
+             col = adjustcolor(cols[i], 0.75), lwd = 3, lend = 1)
+  }
+  
+  legend_labels <- if (is_stationary) c("Theoretical", paste("Realization", 1:5)) else paste("Realization", 1:5)
+  legend_cols   <- if (is_stationary) c("black", adjustcolor(cols, 0.75)) else adjustcolor(cols, 0.75)
+  legend_lwd    <- if (is_stationary) c(7, rep(3, 5)) else rep(3, 5)
+  legend("topright", legend = legend_labels, col = legend_cols, lwd = legend_lwd,
+         lty = 1, bty = "n", cex = 0.75, ncol = 2)
+  
+  dev.off()
+  message("Saved: ", filename)
+}
+```
+#1.3-1.6
+```{r}
+plot_ar2(phi1 = -0.6, phi2 =  0.5, subsection = 1)   # 1.1 & 1.2
+plot_ar2(phi1 = -0.6, phi2 = -0.3, subsection = 3)   # 1.3
+plot_ar2(phi1 =  0.6, phi2 = -0.3, subsection = 4)   # 1.4
+plot_ar2(phi1 = -0.7, phi2 = -0.3, subsection = 5)   # 1.5
+plot_ar2(phi1 = -0.75, phi2 = -0.3, subsection = 6)  # 1.6
+```
+
+
+
 
 Part 2
 ```{r}
