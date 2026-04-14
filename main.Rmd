@@ -266,6 +266,17 @@ plot3
 dev.off()
 ```
 
+```{r}
+library(patchwork)
+
+combined_plot <- plot1 | plot2 | plot3
+
+png("myndir/plot_combined.png", width = 7200, height = 1600, res = 300)
+combined_plot
+dev.off()
+```
+
+
 # 3.2 split to training and test
 ```{r}
 # Training set: up to and including "2013-02-06 00:00" (t_hour = 1,...,167)
