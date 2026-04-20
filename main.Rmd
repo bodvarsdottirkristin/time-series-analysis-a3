@@ -4,98 +4,10 @@ output: html_document
 date: "2026-04-03"
 ---
 Part 1
-# 1.1
-Written in arima package format:
-$X_t = -\phi_1 X_{t-1} - \phi_2 X_{t-2} + \epsilon_t$
-```{r}
-set.seed(42)
-sims <- replicate(5, arima.sim(model = list(ar = c(0.6, -0.5)), n = 200))
-
-pdf("myndir/1_1_ar2_simulations.pdf", width = 7, height = 4)  # good size for Overleaf
-
-par(mar = c(4, 4, 2, 1))  # tighter margins: bottom, left, top, right
-
-matplot(sims,
-        type  = "l",
-        lty   = 1,
-        lwd   = 1.2,
-        col   = scales::alpha(1:5, 0.8),   # or just col = 1:5
-        xlab  = "Time",
-        ylab  = expression(X[t]),
-        main  = expression("AR(2): " ~ phi[1] == -0.6 ~ ", " ~ phi[2] == 0.5),
-        las   = 1)   # horizontal axis tick labels
-
-abline(h = 0, lty = 2, col = "gray60", lwd = 0.8)
-
-legend("topright",
-       legend = paste("Realization", 1:5),
-       col    = 1:5,
-       lty    = 1,
-       lwd    = 1.2,
-       bty    = "n",        # no box around legend
-       cex    = 0.75)
-
-dev.off()
-```
-#1.2
-```{r}
-rho <- ARMAacf(ar = c(0.6, -0.5), lag.max = 30)
-
-cols <- c("#E41A1C", "#377EB8", "#4DAF4A", "#984EA3", "#FF7F00")
-
-pdf("myndir/1_2_ar2_acf.pdf", width = 9, height = 4.5)
-par(mar = c(4, 4, 2, 1))
-
-n_groups <- 31
-n_bars   <- 6
-bar_w    <- 0.12
-gap      <- 0.6
-positions <- seq(0, by = (n_bars * bar_w + gap), length.out = n_groups)
-
-plot(0, type = "n",
-     xlim = c(-0.5, max(positions) + 0.5),
-     ylim = c(-1, 1),
-     xlab = "Lag k", ylab = expression(rho(k)),
-     main = expression("ACF: AR(2), " ~ phi[1] == -0.6 ~ ", " ~ phi[2] == 0.5),
-     xaxt = "n", las = 1)
-
-axis(1, at = positions + (n_bars * bar_w) / 2 - bar_w/2, labels = 0:30, cex.axis = 0.75)
-
-abline(h = 0,               col = "gray40", lwd = 1)
-abline(h =  1.96/sqrt(200), lty = 2, col = "gray60")
-abline(h = -1.96/sqrt(200), lty = 2, col = "gray60")
-
-# Theoretical ACF first (position 0 in each group) — thick & black
-xpos_theo <- positions
-segments(x0 = xpos_theo, y0 = 0,
-         x1 = xpos_theo, y1 = rho,
-         col = "black", lwd = 7, lend = 1)
-
-# Empirical ACF bars (positions 1-5) — slimmer
-for (i in 1:5) {
-  emp  <- acf(sims[, i], lag.max = 30, plot = FALSE)
-  xpos <- positions + i * bar_w
-  segments(x0 = xpos, y0 = 0,
-           x1 = xpos, y1 = as.numeric(emp$acf),
-           col = adjustcolor(cols[i], 0.75),
-           lwd = 3, lend = 1)
-}
-
-legend("topright",
-       legend = c("Theoretical", paste("Realization", 1:5)),
-       col    = c("black", adjustcolor(cols, 0.75)),
-       lwd    = c(7, rep(3, 5)),
-       lty    = 1,
-       bty    = "n", cex = 0.75, ncol = 2)
-
-dev.off()
-```
-
-
 
 Function for 1.1-1.6:
 ```{r}
-plot_ar2 <- function(phi1, phi2, subsection, n = 200, seed = 42) {
+plot_ar2 <- function(phi1, phi2, subsection, n = 200, seed = 1) {
   
   # Create output directory if it doesn't exist
   if (!dir.exists("myndir")) dir.create("myndir")
@@ -124,10 +36,9 @@ plot_ar2 <- function(phi1, phi2, subsection, n = 200, seed = 42) {
   sims <- replicate(5, sim_ar2())
   
   # Theoretical ACF only for stationary processes
-  is_stationary <- tryCatch({
-    ARMAacf(ar = c(-phi1, -phi2), lag.max = 30)
-    TRUE
-  }, error = function(e) FALSE)
+  ar_coeffs <- c(-phi1, -phi2)
+  roots <- polyroot(c(1, -ar_coeffs))
+  is_stationary <- all(Mod(roots) > 1)
   
   cols <- c("#E41A1C", "#377EB8", "#4DAF4A", "#984EA3", "#FF7F00")
 
@@ -151,7 +62,7 @@ plot_ar2 <- function(phi1, phi2, subsection, n = 200, seed = 42) {
   plot(0, type = "n",
        xlim = c(-0.5, max(positions) + 0.5), ylim = c(-1, 1),
        xlab = "Lag k", ylab = expression(rho(k)),
-       main = expression("Empirical vs Theoretical ACF"),
+       main = expression("ACF"),
        xaxt = "n", las = 1)
   axis(1, at = positions + (n_bars * bar_w)/2 - bar_w/2, labels = 0:30, cex.axis = 0.75)
   abline(h = 0, col = "gray40")
@@ -184,7 +95,7 @@ plot_ar2 <- function(phi1, phi2, subsection, n = 200, seed = 42) {
 ```
 #1.3-1.6
 ```{r}
-plot_ar2(phi1 = -0.6, phi2 =  0.5, subsection = 1)   # 1.1 & 1.2
+plot_ar2(phi1 = -0.6, phi2 =  0.5, subsection = "1-2")   # 1.1 & 1.2
 plot_ar2(phi1 = -0.6, phi2 = -0.3, subsection = 3)   # 1.3
 plot_ar2(phi1 =  0.6, phi2 = -0.3, subsection = 4)   # 1.4
 plot_ar2(phi1 = -0.7, phi2 = -0.3, subsection = 5)   # 1.5
@@ -196,9 +107,162 @@ plot_ar2(phi1 = -0.75, phi2 = -0.3, subsection = 6)  # 1.6
 
 Part 2
 ```{r}
-datasolar <- read.csv("datasolar.csv")
-datasolar
+# Read data
+data <- read.csv("datasolar.csv")
+Yt <- data$power
+
+# Parameters
+phi1  <- -0.38
+Phi1  <- -0.94
+mu    <- 5.72
+sigma2 <- 0.22^2
+
+# Transform to Xt
+Xt <- log(Yt) - mu
+
+# Compute residuals: Xt + phi1*Xt-1 + Phi1*Xt-12 + phi1*Phi1*Xt-13 = eps_t
+n <- length(Xt)
+eps <- rep(NA, n)
+for (t in 14:n) {
+  eps[t] <- Xt[t] + phi1 * Xt[t-1] + Phi1 * Xt[t-12] + phi1 * Phi1 * Xt[t-13]
+}
+
+# Extract the valid residuals
+eps_valid <- eps[14:n]
+
+# --- Model validation plots ---
+if (!dir.exists("myndir")) dir.create("myndir")
+
+pdf("myndir/2_1_residual_diagnostics.pdf", width = 9, height = 8)
+par(mfrow = c(2, 2))
+
+# 1. Residuals over time
+plot(14:n, eps_valid, type = "b", xlab = "t", ylab = expression(hat(epsilon)[t]),
+     main = "Residuals", las = 1)
+abline(h = 0, lty = 2)
+
+# 2. ACF
+acf(eps_valid, main = "ACF of residuals", lag.max = 15)
+
+# 3. Histogram
+hist(eps_valid, breaks = 10, prob = TRUE, main = "Histogram of residuals",
+     xlab = expression(hat(epsilon)[t]))
+curve(dnorm(x, mean = 0, sd = 0.22), add = TRUE, col = "red", lwd = 2)
+
+# 4. QQ-plot
+qqnorm(eps_valid)
+qqline(eps_valid, col = "red")
+
+dev.off()
+message("Saved: myndir/2_1_residual_diagnostics.pdf")
 ```
+2.2:
+```{r}
+# --- 2.2: 12-month-ahead forecasts ---
+
+# We already have Xt from 2.1
+# Extend Xt with space for 12 forecasts
+Xt_ext <- c(Xt, rep(NA, 12))
+
+# Iterate predictions for k = 1, ..., 12
+for (k in 1:12) {
+  t_new <- 36 + k
+  Xt_ext[t_new] <- -phi1 * Xt_ext[t_new - 1] - 
+                    Phi1 * Xt_ext[t_new - 12] - 
+                    phi1 * Phi1 * Xt_ext[t_new - 13]
+}
+
+# Transform back to power
+Yhat <- exp(Xt_ext[37:48] + mu)
+
+# Table
+forecast_table <- data.frame(
+  k = 1:12,
+  month = ((data$month[36]) %% 12) + 1:12,
+  month_label = month.abb[((data$month[36] + 0:11) %% 12) + 1],
+  Yhat = round(Yhat, 1)
+)
+print(forecast_table)
+
+# Plot
+pdf("myndir/2_2_forecasts.pdf", width = 9, height = 5)
+
+time_obs  <- 1:36
+time_pred <- 37:48
+
+plot(time_obs, Yt, type = "o", pch = 16,
+     xlim = c(1, 48), ylim = c(0, max(c(Yt, Yhat)) * 1.1),
+     xlab = "Month index", ylab = "Generation (MWh)",
+     main = "Solar power: observed and 12-month forecast",
+     las = 1)
+lines(time_pred, Yhat, type = "o", col = "red", pch = 16)
+legend("topleft", legend = c("Observed", "Forecast"),
+       col = c("black", "red"), pch = 16, lty = 1, bty = "n")
+
+dev.off()
+message("Saved: myndir/2_2_forecasts.pdf")
+```
+2.3:
+```{r}
+# --- 2.3: 95% prediction intervals ---
+
+sigma_eps <- 0.22
+
+# Psi-weights for AR(1): psi_j = (-phi1)^j
+# Variance of k-step prediction error (Eq. 5.150):
+# sigma_k^2 = sigma_eps^2 * (1 + psi_1^2 + ... + psi_{k-1}^2)
+
+Vk <- numeric(12)
+for (k in 1:12) {
+  psi <- (-phi1)^(0:(k-1))   # psi_0 = 1, psi_1 = -phi1, ...
+  Vk[k] <- sigma_eps^2 * sum(psi^2)
+}
+
+# Prediction intervals on X scale
+Xhat <- Xt_ext[37:48]
+lower_X <- Xhat - 1.96 * sqrt(Vk)
+upper_X <- Xhat + 1.96 * sqrt(Vk)
+
+# Transform back to power scale
+lower_Y <- exp(lower_X + mu)
+upper_Y <- exp(upper_X + mu)
+
+# Table
+pi_table <- data.frame(
+  k = 1:12,
+  month = forecast_table$month_label,
+  Yhat = round(Yhat, 1),
+  lower = round(lower_Y, 1),
+  upper = round(upper_Y, 1)
+)
+print(pi_table)
+
+# Plot
+pdf("myndir/2_3_forecast_with_PI.pdf", width = 9, height = 5)
+
+time_obs  <- 1:36
+time_pred <- 37:48
+
+plot(time_obs, Yt, type = "o", pch = 16,
+     xlim = c(1, 48), ylim = c(0, max(upper_Y) * 1.1),
+     xlab = "Month index", ylab = "Generation (MWh)",
+     main = "Solar power: forecast with 95% prediction intervals",
+     las = 1)
+polygon(c(time_pred, rev(time_pred)),
+        c(lower_Y, rev(upper_Y)),
+        col = adjustcolor("red", 0.2), border = NA)
+lines(time_pred, Yhat, type = "o", col = "red", pch = 16)
+lines(time_pred, lower_Y, col = "red", lty = 2)
+lines(time_pred, upper_Y, col = "red", lty = 2)
+legend("topleft", legend = c("Observed", "Forecast", "95% PI"),
+       col = c("black", "red", "red"), pch = c(16, 16, NA),
+       lty = c(1, 1, 2), fill = c(NA, NA, adjustcolor("red", 0.2)),
+       border = NA, bty = "n")
+
+dev.off()
+message("Saved: myndir/2_3_forecast_with_PI.pdf")
+```
+
 
 
 Part 3
@@ -246,7 +310,7 @@ plot2 <- ggplot(data = box_data_60min, aes(x = tdate, y = Tdelta)) +
   geom_line(color = "Red") +
   labs(title = "Tdelta vs dtime")
 plot2
-png("myndir/plot_3_1_2.png", width = 2400, height = 1600, res = 300)
+png("myndir/plot_3_1_2.png", width = 1000, height = 800, res = 300)
 
 plot2
 dev.off()
@@ -446,8 +510,8 @@ dev.off()
 png("myndir/plot_lm_acf_ccf.png", width = 2400, height = 800, res = 300)
 par(mfrow = c(1, 3))
 acf(train_data$resid,                        main = "ACF of residuals")
-ccf(train_data$resid, train_data$Gv,         main = "CCF: residuals vs Gv")
-ccf(train_data$resid, train_data$Tdelta,     main = "CCF: residuals vs Tdelta")
+ccf(train_data$resid, train_data$Gv,         main=expression(bold("c) CCF: ") * G[v] %->% epsilon[t]))
+ccf(train_data$resid, train_data$Tdelta,     main=expression(bold("c) CCF: ") * T[delta] %->% epsilon[t]))
 dev.off()
 par(mfrow = c(1, 1))
 ```
@@ -491,8 +555,8 @@ dev.off()
 png("myndir/plot_arx_acf_ccf.png", width = 2400, height = 800, res = 300)
 par(mfrow = c(1, 3))
 acf(train_data$resid_arx,                        main = "ACF of residuals")
-ccf(train_data$resid_arx, train_data$Gv,         main = "CCF: residuals vs Gv")
-ccf(train_data$resid_arx, train_data$Tdelta,     main = "CCF: residuals vs Tdelta")
+ccf(train_data$resid_arx, train_data$Gv,         main=expression(bold("c) CCF: ") * G[v] %->% epsilon[t]))
+ccf(train_data$resid_arx, train_data$Tdelta,     main=expression(bold("c) CCF: ") * T[delta] %->% epsilon[t]))
 dev.off()
 par(mfrow = c(1, 1))
 ```
@@ -656,4 +720,283 @@ p1
 dev.off()
 ```
 
+
+
+
+
+
+3 sindri
+```{r}
+# Read data
+box <- read.csv("box_data_60min.csv")
+
+# --- Plot the three non-lagged time series ---
+if (!dir.exists("myndir")) dir.create("myndir")
+
+pdf("myndir/3_1_sindri_time_series.pdf", width = 10, height = 8)
+par(mfrow = c(3, 1), mar = c(4, 4.5, 2, 1))
+
+plot(box$thour, box$Ph, type = "l", xlab = "Hour", ylab = expression(P[h] ~ "(W)"),
+     main = "Heating power", las = 1)
+
+plot(box$thour, box$Tdelta, type = "l", xlab = "Hour", ylab = expression(T[delta] ~ "(°C)"),
+     main = "Temperature difference (inside - outside)", las = 1)
+
+plot(box$thour, box$Gv, type = "l", xlab = "Hour", ylab = expression(G[v] ~ "(W/m"^2 * ")"),
+     main = "Vertical solar radiation", las = 1)
+
+dev.off()
+message("Saved: myndir/3_1_sindri_time_series.pdf")
+```
+3.2 og 3.3
+```{r}
+# --- 3.2: Split into train and test ---
+box$tdate <- as.POSIXct(box$tdate)
+train <- box[box$tdate <= as.POSIXct("2013-02-06 00:00:00"), ]
+test  <- box[box$tdate >  as.POSIXct("2013-02-06 00:00:00"), ]
+cat("Train:", nrow(train), "rows | Test:", nrow(test), "rows\n")
+
+# --- 3.3: Investigate variables and their relations ---
+# 1. GENERATE PDF
+pdf("myndir/3_3_sindri_exploratory.pdf", width = 10, height = 6)
+par(mfrow = c(3, 3), mar = c(4, 4.5, 3, 1))
+
+# Row 1: Scatter plots
+plot(train$Tdelta, train$Ph, xlab = expression(T[delta] ~ "(°C)"), ylab = expression(P[h] ~ "(W)"),
+     main = expression(bold("a) ") * P[h] ~ "vs" ~ T[delta]), pch = 16, cex = 0.6)
+
+plot(train$Gv, train$Ph, xlab = expression(G[v] ~ "(W/m"^2 * ")"), ylab = expression(P[h] ~ "(W)"),
+     main = expression(bold("b) ") * P[h] ~ "vs" ~ G[v]), pch = 16, cex = 0.6)
+
+plot(train$Gv, train$Tdelta, xlab = expression(G[v] ~ "(W/m"^2 * ")"), ylab = expression(T[delta] ~ "(°C)"),
+     main = expression(bold("c) ") * T[delta] ~ "vs" ~ G[v]), pch = 16, cex = 0.6)
+
+# Row 2: ACFs (Using rho-hat for Auto-correlation as well)
+acf(train$Ph, lag.max = 30, main = expression(bold("d) ") * hat(rho)[P[h]](k)))
+acf(train$Tdelta, lag.max = 30, main = expression(bold("e) ") * hat(rho)[T[delta]](k)))
+acf(train$Gv, lag.max = 30, main = expression(bold("f) ") * hat(rho)[G[v]](k)))
+
+# Row 3: CCFs (Output first in code to flip lag axis, but Input first in Title notation!)
+# Title g: Input = Tdelta, Output = Ph
+ccf(train$Ph, train$Tdelta, lag.max = 20, 
+    main = expression(bold("g) ") * hat(rho)[T[delta]*","*P[h]](k)))
+
+# Title h: Input = Gv, Output = Ph
+ccf(train$Ph, train$Gv, lag.max = 20, 
+    main = expression(bold("h) ") * hat(rho)[G[v]*","*P[h]](k)))
+
+# Title i: Input = Gv, Output = Tdelta
+ccf(train$Tdelta, train$Gv, lag.max = 20, 
+    main = expression(bold("i) ") * hat(rho)[G[v]*","*T[delta]](k)))
+
+dev.off()
+message("Saved: myndir/3_3_sindri_exploratory.pdf")
+
+# ---------------------------------------------------------
+# 2. EXPORT PLOT DATA TO CSV
+# ---------------------------------------------------------
+
+# Save Scatter Plot Data (Raw series)
+write.csv(train[, c("tdate", "Ph", "Tdelta", "Gv")], 
+          "myndir/csv/3_3_scatter_data.csv", row.names = FALSE)
+
+# Extract and Save ACF Data
+acf_Ph     <- acf(train$Ph, lag.max = 30, plot = FALSE)
+acf_Tdelta <- acf(train$Tdelta, lag.max = 30, plot = FALSE)
+acf_Gv     <- acf(train$Gv, lag.max = 30, plot = FALSE)
+
+df_acf <- data.frame(
+  lag        = acf_Ph$lag[,1,1],      
+  acf_Ph     = acf_Ph$acf[,1,1],
+  acf_Tdelta = acf_Tdelta$acf[,1,1],
+  acf_Gv     = acf_Gv$acf[,1,1]
+)
+write.csv(df_acf, "myndir/csv/3_3_acf_data.csv", row.names = FALSE)
+
+# Extract and Save CCF Data (FLIPPED variables)
+ccf_Ph_Tdelta <- ccf(train$Ph, train$Tdelta, lag.max = 20, plot = FALSE)
+ccf_Ph_Gv     <- ccf(train$Ph, train$Gv, lag.max = 20, plot = FALSE)
+ccf_Tdelta_Gv <- ccf(train$Tdelta, train$Gv, lag.max = 20, plot = FALSE)
+
+df_ccf <- data.frame(
+  lag           = ccf_Ph_Tdelta$lag[,1,1], 
+  ccf_Ph_Tdelta = ccf_Ph_Tdelta$acf[,1,1],
+  ccf_Ph_Gv     = ccf_Ph_Gv$acf[,1,1],
+  ccf_Tdelta_Gv = ccf_Tdelta_Gv$acf[,1,1]
+)
+write.csv(df_ccf, "myndir/csv/3_3_ccf_data.csv", row.names = FALSE)
+
+message("Saved: CSV data files in 'myndir/csv/' directory.")
+```
+
+#3.4
+```{r}
+# --- 3.4: Estimate Impulse Responses via Pre-whitening ---
+
+# ---------------------------------------------------------
+# A. Fit Models and Perform Pre-whitening
+# ---------------------------------------------------------
+# 1. Tdelta -> Ph
+fit_T <- arima(train$Tdelta, order=c(1,0,0), include.mean=FALSE, method="ML")
+ar1_T <- fit_T$coef[1]
+cat("Estimated AR(1) coefficient for Tdelta:", ar1_T, "\n")
+
+alpha_T   <- train$Tdelta - ar1_T * c(0, train$Tdelta[1:(nrow(train)-1)])
+beta_Ph_T <- train$Ph     - ar1_T * c(0, train$Ph[1:(nrow(train)-1)])
+
+# 2. Gv -> Ph
+fit_G <- arima(train$Gv, order=c(1,0,0), include.mean=FALSE, method="ML")
+ar1_G <- fit_G$coef[1]
+cat("Estimated AR(1) coefficient for Gv:", ar1_G, "\n")
+
+alpha_G   <- train$Gv - ar1_G * c(0, train$Gv[1:(nrow(train)-1)])
+beta_Ph_G <- train$Ph - ar1_G * c(0, train$Ph[1:(nrow(train)-1)])
+
+
+# ---------------------------------------------------------
+# B. Calculate True Physical Weights (h_k) using Covariance
+# ---------------------------------------------------------
+# 1. Get Cross-Covariances (C_alpha_beta) by setting type="covariance"
+C_ab_T <- ccf(beta_Ph_T, alpha_T, lag.max=10, type="covariance", plot=FALSE)$acf[11:21,1,1]
+C_ab_G <- ccf(beta_Ph_G, alpha_G, lag.max=10, type="covariance", plot=FALSE)$acf[11:21,1,1]
+
+# 2. Get the Variance of the inputs (S^2 or C_alpha_alpha(0))
+S2_alpha_T <- var(alpha_T)
+S2_alpha_G <- var(alpha_G)
+
+# 3. Apply your course's exact formula: h_k = C_ab(k) / S^2
+h_T <- C_ab_T / S2_alpha_T
+h_G <- C_ab_G / S2_alpha_G
+
+# 4. Calculate the scaled 95% confidence intervals
+conf_T <- (qnorm(0.975) / sqrt(nrow(train))) * (sd(beta_Ph_T) / sd(alpha_T))
+conf_G <- (qnorm(0.975) / sqrt(nrow(train))) * (sd(beta_Ph_G) / sd(alpha_G))
+lags <- 0:10
+
+
+# ---------------------------------------------------------
+# C. Generate the Diagnostic & Result PDF
+# ---------------------------------------------------------
+pdf("myndir/3_4_sindri_impulse_responses_and_diagnostics.pdf", width=10, height=4)
+par(mfcol=c(2,3), mar=c(4, 4.5, 3, 1))
+
+# COLUMN 1: The Guess (PACF of original inputs)
+pacf(train$Tdelta, lag.max=20, 
+     main=expression(bold("a) PACF of Original ") * T[delta]), ylab="PACF")
+pacf(train$Gv, lag.max=20, 
+     main=expression(bold("b) PACF of Original ") * G[v]), ylab="PACF")
+
+# COLUMN 2: The Validation (ACF of pre-whitened inputs)
+acf(alpha_T, lag.max=20, 
+    main=expression(bold("c) ACF of Pre-whitened ") * alpha[T]), ylab=expression(hat(rho)))
+acf(alpha_G, lag.max=20, 
+    main=expression(bold("d) ACF of Pre-whitened ") * alpha[G]), ylab=expression(hat(rho)))
+
+# COLUMN 3: The Result (MANUAL PLOT of the h_k formula)
+# Plot for Tdelta 
+plot(lags, h_T, type="h", lwd=2, 
+     ylim=c(min(h_T, -conf_T)*1.2, max(h_T, conf_T)*1.2),
+     main=expression(bold("e) True Impulse Response: ") * T[delta] %->% P[h]),
+     ylab=expression(hat(h[k])), xlab="Lag (hours)")
+abline(h=0, col="black")
+abline(h=c(conf_T, -conf_T), col="blue", lty=2)
+
+# Plot for Gv
+plot(lags, h_G, type="h", lwd=2, 
+     ylim=c(min(h_G, -conf_G)*1.2, max(h_G, conf_G)*1.2),
+     main=expression(bold("f) True Impulse Response: ") * G[v] %->% P[h]),
+     ylab=expression(hat(h[k])), xlab="Lag (hours)")
+abline(h=0, col="black")
+abline(h=c(conf_G, -conf_G), col="blue", lty=2)
+
+dev.off()
+message("Saved: myndir/3_4_sindri_impulse_responses_and_diagnostics.pdf")
+
+# Update your CSV export dataframe to use the new variable names
+df_ir <- data.frame(lag = lags, hk_Tdelta = h_T, hk_Gv = h_G)
+write.csv(df_ir, "myndir/csv/3_4_sindri_impulse_response_data.csv", row.names=FALSE)
+
+
+# ---------------------------------------------------------
+# D. Export All Data to CSV
+# ---------------------------------------------------------
+# 1. Impulse Response Data
+df_ir <- data.frame(lag = lags, rho_Tdelta = rho_T, rho_Gv = rho_G, nu_Tdelta = nu_T, nu_Gv = nu_G)
+write.csv(df_ir, "myndir/csv/3_4_sindri_impulse_response_data.csv", row.names=FALSE)
+
+# 2. PACF Data
+df_pacf <- data.frame(
+  lag = pacf(train$Tdelta, lag.max=20, plot=FALSE)$lag[,1,1],
+  pacf_Tdelta = pacf(train$Tdelta, lag.max=20, plot=FALSE)$acf[,1,1],
+  pacf_Gv     = pacf(train$Gv, lag.max=20, plot=FALSE)$acf[,1,1]
+)
+write.csv(df_pacf, "myndir/csv/3_4_sindri_pacf_data.csv", row.names=FALSE)
+
+# 3. Alpha ACF Data
+df_alpha_acf <- data.frame(
+  lag = acf(alpha_T, lag.max=20, plot=FALSE)$lag[,1,1],
+  acf_alpha_T = acf(alpha_T, lag.max=20, plot=FALSE)$acf[,1,1],
+  acf_alpha_G = acf(alpha_G, lag.max=20, plot=FALSE)$acf[,1,1]
+)
+write.csv(df_alpha_acf, "myndir/csv/3_4_sindri_alpha_acf_data.csv", row.names=FALSE)
+
+message("Saved: All CSV data to 'myndir/csv/' directory.")
+```
+
+```{r}
+# --- 3.5: Fit the Linear Regression Model ---
+
+# 1. Fit the model without an intercept
+fit_lm <- lm(Ph ~ Tdelta + Gv - 1, data = train)
+
+# Print the estimation results
+cat("=== Linear Regression Estimation Results ===\n")
+print(summary(fit_lm))
+
+# 2. Calculate one-step prediction and residuals
+# For a static model, the 1-step prediction is just the fitted values
+pred_lm <- fitted(fit_lm)
+res_lm  <- residuals(fit_lm)
+
+
+
+# 3. Generate Diagnostic Plots
+pdf("myndir/3_5_sindri_lm_diagnostics.pdf", width=10, height=8)
+par(mfrow=c(2,2), mar=c(4, 4.5, 3, 1))
+
+# a) One-step prediction vs Actual Ph
+plot(train$tdate, train$Ph, type="l", col="black", lwd=1.5,
+     main=expression(bold("a) One-step Prediction vs Actual ") * P[h]),
+     ylab="Heating Power (W)", xlab="Time")
+lines(train$tdate, pred_lm, col="red", lwd=1.5, lty=2)
+legend("topright", legend=c("Actual", "Predicted"), col=c("black", "red"), lty=c(1,2), bty="n")
+
+# b) ACF of Residuals
+acf(res_lm, lag.max=30, 
+    main=expression(bold("b) ACF of Residuals (") * epsilon[t] * ")"),
+    ylab=expression(hat(rho)))
+
+# c) CCF: Tdelta to Residuals
+ccf(res_lm, train$Tdelta, lag.max=20, 
+    main=expression(bold("c) CCF: ") * T[delta] %->% epsilon[t]),
+    ylab=expression(hat(rho)))
+
+# d) CCF: Gv to Residuals
+ccf(res_lm, train$Gv, lag.max=20, 
+    main=expression(bold("d) CCF: ") * G[v] %->% epsilon[t]),
+    ylab=expression(hat(rho)))
+
+dev.off()
+message("Saved: myndir/3_5_sindri_lm_diagnostics.pdf")
+
+# 4. Export Residuals to CSV (Optional, for your tables)
+df_lm <- data.frame(
+  tdate = train$tdate,
+  Ph_actual = train$Ph,
+  Ph_pred = pred_lm,
+  residual = res_lm
+)
+write.csv(df_lm, "myndir/csv/3_5_sindri_lm_residuals.csv", row.names=FALSE)
+message("Saved: myndir/csv/3_5_sindri_lm_residuals.csv")
+```
 
